@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="ChartStash">
+<meta name="theme-color" content="#0f0f0f">
+<link rel="manifest" href="manifest.json">
+<title>ChartStash</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fraunces:ital,wght@0,300;0,700;1,300&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0f0f0f;
+    --surface: #1a1a1a;
+    --surface2: #242424;
+    --border: #2e2e2e;
+    --accent: #e8ff47;
+    --accent2: #ff6b35;
+    --text: #f0f0f0;
+    --muted: #666;
+    --danger: #ff4444;
+    --success: #44ff88;
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+  html, body {
+    height: 100%;
+    overscroll-behavior: none;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    min-height: 100vh;
+    overflow-x: hidden;
+    padding-top: var(--safe-top);
+    padding-bottom: var(--safe-bottom);
+  }
+
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none; z-index: 1000; opacity: 0.4;
+  }
+
+  /* ── TOPBAR ── */
+  #topbar {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    position: sticky; top: 0; z-index: 100;
+  }
+  .logo {
+    font-family: 'Fraunces', serif;
+    font-size: 20px; font-weight: 700;
+    color: var(--accent); cursor: pointer; flex-shrink: 0;
+  }
+  .logo span { color: var(--accent2); font-style: italic; }
+  #breadcrumb {
+    color: var(--muted); font-size: 11px;
+    display: flex; align-items: center; gap: 6px;
+    flex: 1; overflow: hidden;
+  }
+  #breadcrumb .crumb-chart {
+    color: var(--text);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  #new-chart-btn {
+    background: var(--accent); color: #000;
+    border: none; padding: 8px 14px;
+    font-family: 'DM Mono', monospace; font-size: 12px; font-weight: 500;
+    cursor: pointer; border-radius: 4px; flex-shrink: 0;
+    -webkit-appearance: none;
+  }
+
+  /* ── PAGES ── */
+  .page { display: none; animation: fadeIn 0.2s ease; }
+  .page.active { display: block; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+  /* ── HOME ── */
+  #home-page { padding: 24px 16px; }
+  .home-header { margin-bottom: 24px; }
+  .home-header h1 {
+    font-family: 'Fraunces', serif; font-size: 28px;
+    font-weight: 300; line-height: 1.1;
+  }
+  .home-header h1 em { color: var(--accent); font-style: italic; }
+  .home-header p { color: var(--muted); margin-top: 6px; font-size: 12px; }
+
+  #charts-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 14px;
+  }
+
+  /* On small phones: single column */
+  @media (max-width: 480px) {
+    #charts-grid { grid-template-columns: 1fr; }
+  }
+
+  .chart-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px; padding: 16px;
+    cursor: pointer; position: relative; overflow: hidden;
+    transition: border-color 0.2s;
+    -webkit-user-select: none; user-select: none;
+  }
+  .chart-card::after {
+    content: ''; position: absolute;
+    top: 0; left: 0; right: 0; height: 2px;
+    background: var(--accent);
+    transform: scaleX(0); transform-origin: left;
+    transition: transform 0.3s;
+  }
+  .chart-card:active { border-color: #444; }
+  .chart-card:active::after { transform: scaleX(1); }
+
+  .card-title {
+    font-family: 'Fraunces', serif; font-size: 17px; font-weight: 700;
+    color: var(--text); margin-bottom: 4px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .card-meta { font-size: 11px; color: var(--muted); margin-bottom: 14px; }
+  .card-preview { height: 72px; position: relative; }
+  .card-actions { display: flex; gap: 8px; margin-top: 12px; }
+  .card-btn {
+    font-family: 'DM Mono', monospace; font-size: 11px;
+    padding: 7px 14px; border-radius: 4px;
+    border: 1px solid var(--border); background: transparent;
+    cursor: pointer; transition: all 0.15s;
+    -webkit-appearance: none;
+  }
+  .card-btn.open { color: var(--accent); border-color: var(--accent); }
+  .card-btn.open:active { background: var(--accent); color: #000; }
+  .card-btn.del { color: var(--danger); border-color: var(--danger); }
+  .card-btn.del:active { background: var(--danger); color: #fff; }
+
+  .empty-state {
+    grid-column: 1/-1; text-align: center; padding: 60px 20px;
+    color: var(--muted);
+  }
+  .empty-state .big { font-family: 'Fraunces', serif; font-size: 48px; opacity: 0.15; }
+  .empty-state p { margin-top: 10px; font-size: 13px; }
+  .empty-state button {
+    margin-top: 18px; background: var(--accent); color: #000;
+    border: none; padding: 12px 28px;
+    font-family: 'DM Mono', monospace; font-size: 14px;
+    cursor: pointer; border-radius: 6px; -webkit-appearance: none;
+  }
+
+  /* ── DETAIL PAGE ── */
+  #detail-page { padding: 20px 16px; }
+
+  #detail-title-input {
+    font-family: 'Fraunces', serif; font-size: 24px; font-weight: 700;
+    background: transparent; border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text); width: 100%;
+    padding: 4px 0; margin-bottom: 20px;
+    transition: border-color 0.2s; outline: none;
+    -webkit-appearance: none;
+  }
+  #detail-title-input:focus { border-bottom-color: var(--accent); }
+  #detail-title-input::placeholder { color: var(--muted); }
+
+  /* Input + Add row */
+  .input-row {
+    display: flex; gap: 8px; margin-bottom: 10px;
+  }
+  #dataInput {
+    padding: 12px 14px; flex: 1;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text);
+    font-family: 'DM Mono', monospace; font-size: 15px;
+    outline: none; -webkit-appearance: none;
+    transition: border-color 0.2s;
+  }
+  #dataInput:focus { border-color: var(--accent); }
+  #dataInput::placeholder { color: var(--muted); }
+  #add-btn {
+    background: var(--success); color: #000;
+    border: none; padding: 12px 18px;
+    font-family: 'DM Mono', monospace; font-size: 14px; font-weight: 500;
+    border-radius: 8px; cursor: pointer; white-space: nowrap;
+    -webkit-appearance: none;
+  }
+
+  /* Action buttons row */
+  .action-row {
+    display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap;
+  }
+  .btn {
+    padding: 10px 16px; font-size: 13px; font-weight: 500;
+    cursor: pointer; border: none; border-radius: 7px;
+    font-family: 'DM Mono', monospace;
+    transition: opacity 0.15s; white-space: nowrap;
+    -webkit-appearance: none; flex: 1;
+  }
+  .btn-undo   { background: var(--accent2); color: #fff; }
+  .btn-reset  { background: var(--danger); color: #fff; }
+  .btn-zoom-reset { background: var(--surface2); color: var(--muted); border: 1px solid var(--border); flex: 0 0 auto; }
+  .btn:active { opacity: 0.75; }
+
+  .hint { font-size: 11px; color: var(--muted); margin-bottom: 16px; }
+  .hint strong { color: #888; }
+
+  /* Chart container */
+  .chart-wrap {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 16px;
+    touch-action: none; /* let our custom handlers take over */
+    cursor: grab;
+    /* Nice tall chart on mobile */
+    height: calc(100vh - 380px);
+    min-height: 240px;
+    display: flex; align-items: stretch;
+  }
+  .chart-wrap canvas { width: 100% !important; height: 100% !important; }
+  .chart-wrap:active { cursor: grabbing; }
+
+  .data-count {
+    font-size: 11px; color: var(--muted);
+    text-align: right; margin-top: 10px;
+  }
+  .data-count span { color: var(--accent); }
+
+  /* ── MODAL ── */
+  #modal-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.75); backdrop-filter: blur(6px);
+    z-index: 500; align-items: center; justify-content: center;
+    padding: 20px;
+  }
+  #modal-overlay.show { display: flex; }
+  #modal {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 14px; padding: 28px; width: 100%; max-width: 400px;
+    animation: fadeIn 0.15s ease;
+  }
+  #modal h2 { font-family: 'Fraunces', serif; font-size: 22px; margin-bottom: 6px; }
+  #modal p  { color: var(--muted); font-size: 12px; margin-bottom: 18px; }
+  #modal-title-input {
+    width: 100%; padding: 12px 14px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text);
+    font-family: 'DM Mono', monospace; font-size: 15px;
+    outline: none; margin-bottom: 18px;
+    transition: border-color 0.2s; -webkit-appearance: none;
+  }
+  #modal-title-input:focus { border-color: var(--accent); }
+  .modal-actions { display: flex; gap: 10px; }
+  .btn-cancel {
+    background: transparent; border: 1px solid var(--border);
+    color: var(--muted); padding: 11px 18px; flex: 1;
+    font-family: 'DM Mono', monospace; font-size: 13px;
+    border-radius: 8px; cursor: pointer; -webkit-appearance: none;
+  }
+  .btn-create {
+    background: var(--accent); color: #000;
+    border: none; padding: 11px 18px; flex: 2;
+    font-family: 'DM Mono', monospace; font-size: 13px; font-weight: 500;
+    border-radius: 8px; cursor: pointer; -webkit-appearance: none;
+  }
+
+  /* ── DESKTOP overrides ── */
+  @media (min-width: 700px) {
+    #home-page { padding: 36px 28px; }
+    #detail-page { padding: 36px 28px; max-width: 900px; margin: 0 auto; }
+    .home-header h1 { font-size: 36px; }
+    #detail-title-input { font-size: 30px; }
+    .input-row #dataInput { font-size: 14px; }
+    .action-row .btn { flex: 0 0 auto; }
+    .chart-wrap { height: 420px; }
+    #topbar { padding: 16px 28px; }
+    .logo { font-size: 22px; }
+    #new-chart-btn { font-size: 13px; padding: 8px 18px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <div class="logo" onclick="goHome()">Chart<span>Stash</span></div>
+  <div id="breadcrumb"><span>All Charts</span></div>
+  <button id="new-chart-btn" onclick="openNewChartModal()">+ New</button>
+</div>
+
+<!-- HOME -->
+<div id="home-page" class="page active">
+  <div class="home-header">
+    <h1>Your <em>Charts</em></h1>
+    <p>Tap any chart to open and edit it.</p>
+  </div>
+  <div id="charts-grid"></div>
+</div>
+
+<!-- DETAIL -->
+<div id="detail-page" class="page">
+  <input type="text" id="detail-title-input" placeholder="Chart title..." oninput="updateCurrentTitle(this.value)">
+
+  <div class="input-row">
+    <input type="text" id="dataInput" placeholder="e.g. 2 3 4 or 2,3,4" inputmode="decimal" onkeypress="handleEnter(event)">
+    <button id="add-btn" onclick="addData()">Add</button>
+  </div>
+
+  <div class="action-row">
+    <button class="btn btn-undo" onclick="undoLast()">Undo Last</button>
+    <button class="btn btn-reset" onclick="resetChart()">Reset</button>
+    <button class="btn btn-zoom-reset" onclick="resetZoom()">Fit All</button>
+  </div>
+
+  <p class="hint"><strong>Scroll/pinch</strong> to zoom · <strong>Drag</strong> to pan</p>
+
+  <div class="chart-wrap">
+    <canvas id="liveChart"></canvas>
+  </div>
+  <div class="data-count" id="data-count">Points: <span>0</span></div>
+</div>
+
+<!-- MODAL -->
+<div id="modal-overlay">
+  <div id="modal">
+    <h2>New Chart</h2>
+    <p>Give your chart a name to get started.</p>
+    <input type="text" id="modal-title-input" placeholder="e.g. Weekly Sales, Heart Rate..." maxlength="60" onkeypress="modalEnter(event)">
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+      <button class="btn-create" onclick="createChart()">Create →</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── STATE ──────────────────────────────────────────────
+const STORAGE_KEY = 'chartstash_v1';
+let charts = [];
+let currentId = null;
+let chartInstance = null;
+
+function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(charts)); }
+function load() {
+  try { charts = JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; }
+  catch(e) { charts = []; }
+}
+
+// ── ROUTING ────────────────────────────────────────────
+function goHome() {
+  currentId = null;
+  document.getElementById('home-page').classList.add('active');
+  document.getElementById('detail-page').classList.remove('active');
+  document.getElementById('breadcrumb').innerHTML = '<span>All Charts</span>';
+  if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+  renderHome();
+}
+
+function goDetail(id) {
+  const chart = charts.find(c => c.id === id);
+  if (!chart) return;
+  currentId = id;
+  document.getElementById('home-page').classList.remove('active');
+  document.getElementById('detail-page').classList.add('active');
+  document.getElementById('detail-title-input').value = chart.title;
+  document.getElementById('breadcrumb').innerHTML =
+    `<span style="cursor:pointer;color:var(--muted)" onclick="goHome()">All Charts</span>
+     <span style="color:var(--border)"> › </span>
+     <span class="crumb-chart">${escHtml(chart.title)}</span>`;
+  buildDetailChart(chart);
+}
+
+// ── HOME ───────────────────────────────────────────────
+function renderHome() {
+  const grid = document.getElementById('charts-grid');
+  if (!charts.length) {
+    grid.innerHTML = `<div class="empty-state">
+      <div class="big">∅</div>
+      <p>No charts yet. Create your first one!</p>
+      <button onclick="openNewChartModal()">+ New Chart</button>
+    </div>`;
+    return;
+  }
+  grid.innerHTML = charts.map(c => {
+    const pts = c.data.length;
+    const last = pts > 0 ? c.data[pts-1] : '—';
+    return `<div class="chart-card" onclick="goDetail('${c.id}')">
+      <div class="card-title">${escHtml(c.title)}</div>
+      <div class="card-meta">${pts} point${pts!==1?'s':''} · last: ${last}</div>
+      <div class="card-preview"><canvas id="prev-${c.id}"></canvas></div>
+      <div class="card-actions" onclick="event.stopPropagation()">
+        <button class="card-btn open" onclick="goDetail('${c.id}')">Open →</button>
+        <button class="card-btn del" onclick="deleteChart('${c.id}')">Delete</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  charts.forEach(c => {
+    const canvas = document.getElementById(`prev-${c.id}`);
+    if (!canvas) return;
+    new Chart(canvas.getContext('2d'), {
+      type: 'line',
+      data: {
+        labels: c.data.map((_,i) => i+1),
+        datasets: [{ data: c.data, borderColor: '#e8ff47', borderWidth: 1.5, pointRadius: 0, fill: false, tension: 0 }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: false,
+        plugins: { legend: { display: false } },
+        scales: { x: { display: false }, y: { display: false } }
+      }
+    });
+  });
+}
+
+// ── DETAIL CHART ───────────────────────────────────────
+function buildDetailChart(chart) {
+  if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+  const ctx = document.getElementById('liveChart').getContext('2d');
+  chartInstance = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: chart.data.map((_,i) => i+1),
+      datasets: [{
+        label: chart.title,
+        data: chart.data,
+        borderColor: '#e8ff47',
+        borderWidth: 2,
+        pointBackgroundColor: '#e8ff47',
+        pointBorderColor: '#0f0f0f',
+        pointBorderWidth: 1.5,
+        pointRadius: 4,
+        fill: false,
+        tension: 0
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: { title: { display: true, text: 'Index', color: '#666' }, grid: { color: '#222' }, ticks: { color: '#666', maxTicksLimit: 8 } },
+        y: { title: { display: true, text: 'Value', color: '#666' }, grid: { color: '#222' }, ticks: { color: '#666' }, beginAtZero: false }
+      },
+      plugins: { legend: { labels: { color: '#999', font: { family: 'DM Mono' } } } },
+      animation: { duration: 300 }
+    }
+  });
+  updateCount();
+  setTimeout(() => { if (window._attachZoomEvents) window._attachZoomEvents(); }, 50);
+}
+
+function updateCount() {
+  const chart = getChart();
+  if (!chart) return;
+  document.getElementById('data-count').innerHTML = `Points: <span>${chart.data.length}</span>`;
+}
+
+// ── DATA OPS ───────────────────────────────────────────
+function getChart() { return charts.find(c => c.id === currentId); }
+
+function addData() {
+  const input = document.getElementById('dataInput');
+  const raw = input.value.trim();
+  if (!raw) return;
+  const vals = raw.split(/[\s,]+/).map(v => parseFloat(v)).filter(v => !isNaN(v));
+  if (!vals.length) return;
+  const chart = getChart();
+  chart.data.push(...vals);
+  save();
+  chartInstance.data.labels = chart.data.map((_,i) => i+1);
+  chartInstance.data.datasets[0].data = chart.data;
+  chartInstance.update();
+  updateCount();
+  input.value = ''; input.focus();
+}
+
+function undoLast() {
+  const chart = getChart();
+  if (!chart || !chart.data.length) return;
+  chart.data.pop(); save();
+  chartInstance.data.labels = chart.data.map((_,i) => i+1);
+  chartInstance.data.datasets[0].data = chart.data;
+  chartInstance.update(); updateCount();
+}
+
+function resetChart() {
+  if (!confirm('Clear all data points?')) return;
+  const chart = getChart(); chart.data = []; save();
+  chartInstance.data.labels = []; chartInstance.data.datasets[0].data = [];
+  chartInstance.update(); updateCount();
+}
+
+function updateCurrentTitle(val) {
+  const chart = getChart(); if (!chart) return;
+  chart.title = val; save();
+  const el = document.querySelector('.crumb-chart');
+  if (el) el.textContent = val || 'Untitled';
+  if (chartInstance) { chartInstance.data.datasets[0].label = val; chartInstance.update(); }
+}
+
+function resetZoom() {
+  if (!chartInstance) return;
+  chartInstance.options.scales.x.min = undefined;
+  chartInstance.options.scales.x.max = undefined;
+  chartInstance.update('none');
+}
+
+function handleEnter(e) { if (e.key === 'Enter') addData(); }
+function deleteChart(id) {
+  const chart = charts.find(c => c.id === id);
+  if (!confirm(`Delete "${chart?.title}"?`)) return;
+  charts = charts.filter(c => c.id !== id); save(); renderHome();
+}
+
+// ── MODAL ──────────────────────────────────────────────
+function openNewChartModal() {
+  document.getElementById('modal-title-input').value = '';
+  document.getElementById('modal-overlay').classList.add('show');
+  setTimeout(() => document.getElementById('modal-title-input').focus(), 100);
+}
+function closeModal() { document.getElementById('modal-overlay').classList.remove('show'); }
+function modalEnter(e) { if (e.key === 'Enter') createChart(); }
+function createChart() {
+  const title = document.getElementById('modal-title-input').value.trim() || 'Untitled Chart';
+  const id = 'c_' + Date.now();
+  charts.push({ id, title, data: [] }); save();
+  closeModal(); goDetail(id);
+}
+
+// ── UTILS ──────────────────────────────────────────────
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── ZOOM & PAN ENGINE (mouse + touch) ──────────────────
+(function() {
+  let isDragging = false, dragStartX = 0, dragStartMin = null, dragStartMax = null;
+  // Touch pinch state
+  let lastTouchDist = null, lastTouchMidFraction = null;
+  let isSingleTouch = false, touchStartX = 0, touchStartMin = null, touchStartMax = null;
+
+  function getRange() {
+    if (!chartInstance) return null;
+    const x = chartInstance.scales.x;
+    const labels = chartInstance.data.labels;
+    const min = x.min !== undefined ? x.min : 0;
+    const max = x.max !== undefined ? x.max : labels.length - 1;
+    return { min, max };
+  }
+
+  function applyRange(min, max) {
+    if (!chartInstance) return;
+    const len = chartInstance.data.labels.length;
+    if (len < 2) return;
+    const size = Math.max(1, Math.min(max - min, len - 1));
+    let lo = Math.max(0, Math.min(min, len - 1 - size));
+    let hi = lo + size;
+    if (hi > len - 1) { hi = len - 1; lo = Math.max(0, hi - size); }
+    chartInstance.options.scales.x.min = lo;
+    chartInstance.options.scales.x.max = hi;
+    chartInstance.update('none');
+  }
+
+  function fracToData(frac) {
+    const r = getRange(); if (!r) return 0;
+    return r.min + frac * (r.max - r.min);
+  }
+
+  function canvasX(clientX) {
+    const canvas = document.getElementById('liveChart');
+    if (!canvas || !chartInstance) return 0;
+    const rect = canvas.getBoundingClientRect();
+    const ca = chartInstance.chartArea;
+    return Math.max(0, Math.min(1, (clientX - rect.left - ca.left) / (ca.right - ca.left)));
+  }
+
+  // ── MOUSE ──
+  function onWheel(e) {
+    if (!chartInstance || !chartInstance.data.labels?.length) return;
+    e.preventDefault();
+    const r = getRange(), size = r.max - r.min;
+    const frac = canvasX(e.clientX);
+    const factor = e.deltaY < 0 ? 0.82 : 1.22;
+    const newSize = size * factor;
+    const anchor = fracToData(frac);
+    applyRange(anchor - frac * newSize, anchor + (1 - frac) * newSize);
+  }
+
+  function onMouseDown(e) {
+    if (!chartInstance || chartInstance.data.labels?.length < 2) return;
+    isDragging = true; dragStartX = e.clientX;
+    const r = getRange(); dragStartMin = r.min; dragStartMax = r.max;
+    document.body.style.userSelect = 'none';
+  }
+
+  function onMouseMove(e) {
+    if (!isDragging || !chartInstance) return;
+    const ca = chartInstance.chartArea;
+    const pxW = ca.right - ca.left;
+    const size = dragStartMax - dragStartMin;
+    const shift = -((e.clientX - dragStartX) / pxW) * size;
+    applyRange(dragStartMin + shift, dragStartMax + shift);
+  }
+
+  function onMouseUp() { isDragging = false; document.body.style.userSelect = ''; }
+
+  // ── TOUCH ──
+  function touchDist(t) {
+    const dx = t[0].clientX - t[1].clientX, dy = t[0].clientY - t[1].clientY;
+    return Math.sqrt(dx*dx + dy*dy);
+  }
+  function touchMidX(t) { return (t[0].clientX + t[1].clientX) / 2; }
+
+  function onTouchStart(e) {
+    if (!chartInstance) return;
+    if (e.touches.length === 2) {
+      // Pinch init
+      isSingleTouch = false;
+      lastTouchDist = touchDist(e.touches);
+      lastTouchMidFraction = canvasX(touchMidX(e.touches));
+      e.preventDefault();
+    } else if (e.touches.length === 1) {
+      isSingleTouch = true;
+      touchStartX = e.touches[0].clientX;
+      const r = getRange(); touchStartMin = r.min; touchStartMax = r.max;
+    }
+  }
+
+  function onTouchMove(e) {
+    if (!chartInstance) return;
+    if (e.touches.length === 2) {
+      e.preventDefault();
+      const dist = touchDist(e.touches);
+      const midFrac = canvasX(touchMidX(e.touches));
+      if (lastTouchDist === null) { lastTouchDist = dist; lastTouchMidFraction = midFrac; return; }
+      const factor = lastTouchDist / dist; // pinch in = smaller dist = factor > 1 = zoom out... invert:
+      const zoomFactor = dist / lastTouchDist; // >1 means fingers spread = zoom in
+      const r = getRange(), size = r.max - r.min;
+      const newSize = size / zoomFactor;
+      const anchor = fracToData(midFrac);
+      applyRange(anchor - midFrac * newSize, anchor + (1 - midFrac) * newSize);
+      lastTouchDist = dist;
+      lastTouchMidFraction = midFrac;
+    } else if (e.touches.length === 1 && isSingleTouch) {
+      e.preventDefault();
+      const ca = chartInstance.chartArea;
+      const pxW = ca.right - ca.left;
+      const size = (touchStartMax !== null ? touchStartMax : 0) - (touchStartMin !== null ? touchStartMin : 0);
+      const shift = -((e.touches[0].clientX - touchStartX) / pxW) * size;
+      if (touchStartMin !== null) applyRange(touchStartMin + shift, touchStartMax + shift);
+    }
+  }
+
+  function onTouchEnd(e) {
+    if (e.touches.length < 2) { lastTouchDist = null; lastTouchMidFraction = null; }
+    if (e.touches.length === 0) { isSingleTouch = false; }
+  }
+
+  function attachEvents() {
+    const canvas = document.getElementById('liveChart');
+    if (!canvas) return;
+    // Remove old listeners by cloning... but we track with a flag instead
+    if (canvas._zoomAttached) return;
+    canvas._zoomAttached = true;
+
+    canvas.addEventListener('wheel', onWheel, { passive: false });
+    canvas.addEventListener('mousedown', onMouseDown);
+    canvas.addEventListener('touchstart', onTouchStart, { passive: false });
+    canvas.addEventListener('touchmove', onTouchMove, { passive: false });
+    canvas.addEventListener('touchend', onTouchEnd);
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  }
+
+  window._attachZoomEvents = function() {
+    // Reset attachment flag so new canvas gets events
+    const canvas = document.getElementById('liveChart');
+    if (canvas) canvas._zoomAttached = false;
+    attachEvents();
+  };
+})();
+
+// ── INIT ───────────────────────────────────────────────
+load();
+renderHome();
+document.getElementById('modal-overlay').addEventListener('click', function(e) {
+  if (e.target === this) closeModal();
+});
+
+// ── SERVICE WORKER ─────────────────────────────────────
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  });
+}
+</script>
+</body>
+</html>
